@@ -507,6 +507,7 @@ prettyWarning = \case
       suggestion inscope x = nest 2 $ par $ concat
         [ [ "did you forget space around the ':'?"  | ':' `elem` s ]
         , [ "did you forget space around the '->'?" | "->" `List.isInfixOf` s ]
+        , [ "did you forget space around the ','?"  | ',' `elem` s ]
         , maybeToList $ didYouMean inscope C.unqualify x
         ]
         where
