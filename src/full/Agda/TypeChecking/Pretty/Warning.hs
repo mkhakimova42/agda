@@ -501,6 +501,7 @@ prettyWarning = \case
       [ fsep $ pwords "Not in scope:"
       , do
         inscope <- Set.toList . concreteNamesInScope <$> getScope
+        reportSDoc "maria" 10 $ "everything in scope (hopefully): " <+> prettyTCM inscope
         prettyNotInScopeNames True (suggestion inscope) $ singleton x
       ]
       where
