@@ -508,8 +508,9 @@ prettyWarning = \case
       suggestion inscope x = nest 2 $ par $ concat
         [ [ "did you forget space around the ':'?"  | ':' `elem` s ]
         , [ "did you forget space around the '->'?" | "->" `List.isInfixOf` s ]
-        , [ "did you forget space around the ','?"  | ',' `elem` s ]
+        -- , [ "did you forget space around the ','?"  | ',' `elem` s ]
         , maybeToList $ didYouMean inscope C.unqualify x
+        , maybeToList $ didYouMeanInfix inscope C.unqualify x
         ]
         where
         par []  = empty
@@ -687,6 +688,30 @@ didYouMean inscope canon x
   close a b    = editDistance a b <= maxDist (length a)
   ys           = map prettyShow $ filter (close (strip $ canon x) . strip . C.unqualify) inscope
 
+{-# SPECIALIZE didYouMeanInfix :: (Pretty a, Pretty b) => [C.QName] -> (a -> b) -> a -> Maybe (TCM Doc) #-}
+-- | Suggest some corrections to a misspelled name.
+didYouMeanInfix
+  :: (MonadPretty m, Pretty a, Pretty b)
+  => [C.QName]     -- ^ Names in scope.
+  -> (a -> b)      -- ^ Canonization function for similarity search.
+  -> a             -- ^ A name which is not in scope.
+  -> Maybe (m Doc) -- ^ "did you mean" hint.
+didYouMeanInfix inscope canon x
+  | null ys   = Just "NEW: list of potential stuff was empty"
+  | otherwise = Just $ sep
+      [ "NEW: did you forget space around the "
+      , nest 2 (vcat $ punctuate " or" $
+                 map (\ y -> text $ "'" ++ y ++ "'") ys)
+        <> "?"
+      ]
+  where
+  strip :: Pretty b => b -> String
+  strip        = map toLower . filter (/= '_') . prettyShow
+  -- dropModule x = fromMaybe x $ List.stripPrefix "module " x
+  -- maxDist n    = div n 3
+  -- close a b    = editDistance a b <= maxDist (length a)
+  tmp = filter (\y -> (strip . C.unqualify $ y) `List.isInfixOf` (strip $ canon x)) inscope
+  ys = map prettyShow $ tmp
 
 prettyTCWarnings :: Set TCWarning -> TCM String
 prettyTCWarnings = List.intercalate "\n" <.> map P.render <.> prettyTCWarnings'
