@@ -710,8 +710,9 @@ didYouMeanInfix inscope canon x
   -- dropModule x = fromMaybe x $ List.stripPrefix "module " x
   -- maxDist n    = div n 3
   -- close a b    = editDistance a b <= maxDist (length a)
-  tmp = filter (\y -> (strip . C.unqualify $ y) `List.isInfixOf` (strip $ canon x)) inscope
-  ys = map prettyShow $ tmp
+  infixes = filter (\y -> (strip . C.unqualify $ y) `List.isInfixOf` (strip $ canon x)) inscope
+  ys = List.nub $ map (\y -> prettyShow . C.unqualify $ y) infixes
+  -- ys = map prettyShow $ infixes
 
 prettyTCWarnings :: Set TCWarning -> TCM String
 prettyTCWarnings = List.intercalate "\n" <.> map P.render <.> prettyTCWarnings'
