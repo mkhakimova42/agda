@@ -689,7 +689,7 @@ didYouMean inscope canon x
   ys           = map prettyShow $ filter (close (strip $ canon x) . strip . C.unqualify) inscope
 
 {-# SPECIALIZE didYouMeanInfix :: (Pretty a, Pretty b) => [C.QName] -> (a -> b) -> a -> Maybe (TCM Doc) #-}
--- | Suggest some corrections to a misspelled name.
+-- | Suggest a correction if the name can be completely broken down into names in scope.
 didYouMeanInfix
   :: (MonadPretty m, Pretty a, Pretty b)
   => [C.QName]     -- ^ Names in scope.
@@ -699,7 +699,7 @@ didYouMeanInfix
 didYouMeanInfix inscope canon x
   | null ys   = Just "NEW: list of potential stuff was empty"
   | otherwise = Just $ sep
-      [ "NEW: did you forget space around the "
+      [ "NEW: did you forget whitespace in "
       , nest 2 (vcat $ punctuate " or" $
                  map (\ y -> text $ "'" ++ y ++ "'") ys)
         <> "?"
@@ -710,8 +710,20 @@ didYouMeanInfix inscope canon x
   -- dropModule x = fromMaybe x $ List.stripPrefix "module " x
   -- maxDist n    = div n 3
   -- close a b    = editDistance a b <= maxDist (length a)
+  wordBreakHelp :: [String] -> [String] -> [String] -> String -> [[String]]
+  wordBreakHelp wordSet modWordSet curWords [] = [curWords]
+  wordBreakHelp wordSet [] curWords word = []
+  wordBreakHelp wordSet (y:ys) curWords word
+    | y `List.isPrefixOf` word = (wordBreakHelp wordSet wordSet (curWords ++ [y]) (drop (length y) word)) ++ (wordBreakHelp wordSet ys curWords word)
+    | otherwise = wordBreakHelp wordSet ys curWords word
+
+  wordBreak :: [String] -> String -> [[String]]
+  wordBreak wordSet word = wordBreakHelp wordSet wordSet [] word
+
   infixes = filter (\y -> (strip . C.unqualify $ y) `List.isInfixOf` (strip $ canon x)) inscope
-  ys = List.nub $ map (\y -> prettyShow . C.unqualify $ y) infixes
+  tmp = List.nub $ map (\y -> prettyShow . strip . C.unqualify $ y) infixes
+
+  ys = map unwords . wordBreak tmp . strip $ canon x
   -- ys = map prettyShow $ infixes
 
 prettyTCWarnings :: Set TCWarning -> TCM String
