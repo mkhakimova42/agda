@@ -697,7 +697,7 @@ didYouMeanInfix
   -> a             -- ^ A name which is not in scope.
   -> Maybe (m Doc) -- ^ "did you mean" hint.
 didYouMeanInfix inscope canon x
-  | null ys   = Just "NEW: list of potential stuff was empty"
+  | null ys   = Nothing --Just "NEW: list of potential stuff was empty"
   | otherwise = Just $ sep
       [ "NEW: did you forget whitespace in "
       , nest 2 (vcat $ punctuate " or" $
@@ -706,7 +706,7 @@ didYouMeanInfix inscope canon x
       ]
   where
   strip :: Pretty b => b -> String
-  strip        = map toLower . filter (/= '_') . prettyShow
+  strip        = filter (/= '_') . prettyShow
   -- dropModule x = fromMaybe x $ List.stripPrefix "module " x
   -- maxDist n    = div n 3
   -- close a b    = editDistance a b <= maxDist (length a)
@@ -714,7 +714,7 @@ didYouMeanInfix inscope canon x
   wordBreakHelp wordSet modWordSet curWords [] = [curWords]
   wordBreakHelp wordSet [] curWords word = []
   wordBreakHelp wordSet (y:ys) curWords word
-    | y `List.isPrefixOf` word = (wordBreakHelp wordSet wordSet (curWords ++ [y]) (drop (length y) word)) ++ (wordBreakHelp wordSet ys curWords word)
+    | (y `List.isPrefixOf` word) && (not $ null y) = (wordBreakHelp wordSet wordSet (curWords ++ [y]) (drop (length y) word)) ++ (wordBreakHelp wordSet ys curWords word) --TODO: ask jesper
     | otherwise = wordBreakHelp wordSet ys curWords word
 
   wordBreak :: [String] -> String -> [[String]]
@@ -723,8 +723,9 @@ didYouMeanInfix inscope canon x
   infixes = filter (\y -> (strip . C.unqualify $ y) `List.isInfixOf` (strip $ canon x)) inscope
   tmp = List.nub $ map (\y -> prettyShow . strip . C.unqualify $ y) infixes
 
-  ys = map unwords . wordBreak tmp . strip $ canon x
-  -- ys = map prettyShow $ infixes
+  -- need to filter out cases where the entire stripped name is in scope, as spaces cannot help (e.g. see test/Fail/AnonymousImport)
+  ys = map unwords . filter ((> 1) . length) . wordBreak tmp . strip $ canon x
+  --ys = map prettyShow $ infixes
 
 prettyTCWarnings :: Set TCWarning -> TCM String
 prettyTCWarnings = List.intercalate "\n" <.> map P.render <.> prettyTCWarnings'
