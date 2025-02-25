@@ -401,7 +401,7 @@ library
 
   if flag(enable-cluster-counting)
     cpp-options:    -DCOUNT_CLUSTERS
-    build-depends:  text-icu >= 0.7.1.0
+    -- build-depends:  text-icu >= 0.7.1.0
 
   if os(windows)
     build-depends:  Win32 >= 2.6.1.0 && < 2.15
@@ -456,6 +456,7 @@ library
     , strict               >= 0.4.0.1   && < 0.6
         -- module Data.Strict.Classes entered in strict-0.4
     , text                 >= 1.2.4.0   && < 2.2
+    , text-icu             >= 0.7.1.0
     , time                 >= 1.9.3     && < 1.15
     , transformers         >= 0.5.6.2   && < 0.7
     , unordered-containers >= 0.2.10.0  && < 0.3

@@ -15,6 +15,9 @@ import Data.Maybe
 import Data.Set (Set)
 import qualified Data.Set  as Set
 import qualified Data.Text as T
+import qualified Data.Text.ICU           as ICU
+
+import Numeric (showHex)
 
 import Agda.TypeChecking.Monad.Base
 import qualified Agda.TypeChecking.Monad.Base.Warning as W
@@ -501,6 +504,7 @@ prettyWarning = \case
       [ fsep $ pwords "Not in scope:"
       , do
         inscope <- Set.toList . concreteNamesInScope <$> getScope
+        reportSDoc "maria" 10 $ "everything in scope (hopefully): " <+> prettyTCM inscope
         prettyNotInScopeNames True (suggestion inscope) $ singleton x
       ]
       where
@@ -508,6 +512,7 @@ prettyWarning = \case
         [ [ "did you forget space around the ':'?"  | ':' `elem` s ]
         , [ "did you forget space around the '->'?" | "->" `List.isInfixOf` s ]
         , maybeToList $ didYouMean inscope C.unqualify x
+        , maybeToList $ didYouMeanConfusableUnicode inscope C.unqualify x
         ]
         where
         par []  = empty
@@ -685,6 +690,56 @@ didYouMean inscope canon x
   close a b    = editDistance a b <= maxDist (length a)
   ys           = map prettyShow $ filter (close (strip $ canon x) . strip . C.unqualify) inscope
 
+{-# SPECIALIZE didYouMean :: (Pretty a, Pretty b) => [C.QName] -> (a -> b) -> a -> Maybe (TCM Doc) #-}
+-- | Suggest some corrections to a misspelled name.
+didYouMeanConfusableUnicode
+  :: (MonadPretty m, Pretty a, Pretty b)
+  => [C.QName]     -- ^ Names in scope.
+  -> (a -> b)      -- ^ Canonization function for similarity search.
+  -> a             -- ^ A name which is not in scope.
+  -> Maybe (m Doc) -- ^ "did you mean" hint.
+didYouMeanConfusableUnicode inscope canon x
+  | null ys   = Just $ "UNICODE NEW: none of the following was considered confusable with out of scope name: " <+> prettyTCM inscope
+  | otherwise = Just $ sep
+      [ "UNICODE NEW: did you accidentally use a confusable character?"
+      , nest 2 (vcat $ map (\ y -> text $ y) ys)
+      ]
+  where
+  strip :: Pretty b => b -> String
+  strip        = map toLower . filter (/= '_') . prettyShow
+  -- dropModule x = fromMaybe x $ List.stripPrefix "module " x
+  -- maxDist n    = div n 3
+  -- close a b    = editDistance a b <= maxDist (length a)
+
+  confusable a b  = ICU.areConfusable ICU.spoof (T.pack a) (T.pack b) /= ICU.CheckOK
+
+  getConfusChars :: String -> String -> String -> String -> String -> String -> (String, String, String, String)
+  getConfusChars [] ys charsX charsY indicatorX indicatorY = (charsX, charsY, indicatorX, indicatorY)
+  getConfusChars xs [] charsX charsY indicatorX indicatorY = (charsX, charsY, indicatorX, indicatorY)
+  --getConfusChars ('_':xs) ys charsX charsY indicatorX indicatorY = getConfusChars xs ys charsX charsY (indicatorX ++ "-") indicatorY
+  getConfusChars xs ('_':ys) charsX charsY indicatorX indicatorY = getConfusChars xs ys charsX charsY indicatorX (indicatorY ++ "-")
+  getConfusChars (x:xs) (y:ys) charsX charsY indicatorX indicatorY 
+    | x /= y = getConfusChars xs ys (charsX ++ [x]) (charsY ++ [y]) (indicatorX ++ "^") (indicatorY ++ "^")
+    | otherwise = getConfusChars xs ys charsX charsY (indicatorX ++ "-") (indicatorY ++ "-")
+  
+  getConfusCharsHelp :: String -> String -> (String, String, String, String)
+  getConfusCharsHelp x y = getConfusChars x y [] [] [] []
+
+  prettyDisplayDifferences :: String -> String -> [String]
+  prettyDisplayDifferences x y =
+    [ List.intercalate "\t" $ [prettyShow x ++ "\t", hexX, prettyShow y ++ "\t", hexY]
+    , indicatorX ++ "\t\t\t\t" ++ indicatorY
+    ]
+    where
+      (charsX, charsY, indicatorX, indicatorY) = getConfusCharsHelp x y
+      prettyHexcode :: String -> String
+      prettyHexcode zs = List.intercalate ", " $ map (\z -> "'" ++ [z] ++ "': 0x" ++ showHex (fromEnum z) "") zs
+      hexX = prettyHexcode charsX
+      hexY = prettyHexcode charsY
+
+  confusableNames = map prettyShow $ filter (confusable (strip $ canon x) . strip . C.unqualify) inscope
+  tmp = map (\y -> prettyDisplayDifferences (strip $ canon x) y) confusableNames
+  ys = (List.intercalate "\t" $ ["You typed", "Hex code(s)", "In scope", "Hex code(s)"]) : concat tmp --confusableNames
 
 prettyTCWarnings :: Set TCWarning -> TCM String
 prettyTCWarnings = List.intercalate "\n" <.> map P.render <.> prettyTCWarnings'
