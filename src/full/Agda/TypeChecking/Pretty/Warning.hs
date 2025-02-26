@@ -17,6 +17,8 @@ import qualified Data.Set  as Set
 import qualified Data.Text as T
 import qualified Data.Text.ICU           as ICU
 
+import qualified Text.PrettyPrint.Boxes as Box
+
 import Numeric (showHex)
 
 import Agda.TypeChecking.Monad.Base
@@ -702,7 +704,7 @@ didYouMeanConfusableUnicode inscope canon x
   | null ys   = Nothing --Just $ "UNICODE NEW: none of the following was considered confusable with out of scope name: " <+> prettyTCM inscope
   | otherwise = Just $ sep
       [ "UNICODE NEW: did you accidentally use a confusable character?"
-      , nest 2 (vcat $ map (\ y -> text $ y) ys)
+      , nest 2 (vcat $ map (\ y -> multiLineText $ y) ys)
       ]
   where
   strip :: Pretty b => b -> String
@@ -725,15 +727,16 @@ didYouMeanConfusableUnicode inscope canon x
   getConfusCharsHelp :: String -> String -> (String, String, String, String)
   getConfusCharsHelp x y = getConfusChars x y [] [] [] []
 
-  prettyDisplayDifferences :: String -> String -> [String]
+  prettyDisplayDifferences :: String -> String -> [[String]]
   prettyDisplayDifferences x y =
     -- [ List.intercalate "\t" $ [prettyShow x ++ "\t", hexX, prettyShow y ++ "\t", hexY]
     -- , indicatorX ++ "\t\t\t\t" ++ indicatorY
     -- ]
-    [ List.intercalate "\t" $ ["You typed", prettyShow x, hexX]
-    , "\t\t\t" ++ indicatorX
-    , List.intercalate "\t" $ ["In Scope\t", prettyShow y, hexY]
-    , "\t\t\t" ++ indicatorY
+    [ [" ", "Name", "Confusable characters"]
+    , ["You typed", prettyShow x, hexX]
+    , [" ", indicatorX, " "]
+    , ["In Scope", prettyShow y, hexY]
+    , [" ", indicatorY, " "]
     ]
     where
       (charsX, charsY, indicatorX, indicatorY) = getConfusCharsHelp x y
@@ -747,9 +750,9 @@ didYouMeanConfusableUnicode inscope canon x
       groups n xs = takeWhile (not.null) . List.unfoldr (Just . splitAt n) $ xs
 
   confusableNames = map prettyShow $ filter (confusable (strip $ canon x) . strip . C.unqualify) inscope
-  tmp = map (\y -> prettyDisplayDifferences (strip $ canon x) y) confusableNames
+  tmp = map (\y -> Box.render . Box.hsep 4 Box.left . map (Box.vcat Box.left . map Box.text) . List.transpose $ prettyDisplayDifferences (strip $ canon x) y) confusableNames
   ys  | null tmp  = []
-      | otherwise = (List.intercalate "\t" $ ["\t\t", "Name", "Confusable characters"]) : (insertAtN 4 "OR" $ concat tmp) --confusableNames
+      | otherwise = insertAtN 1 "OR" $ tmp --confusableNames
   -- ys = (List.intercalate "\t" $ ["You typed", "Hex code(s)", "In scope", "Hex code(s)"]) : concat tmp --confusableNames
 
 prettyTCWarnings :: Set TCWarning -> TCM String
