@@ -699,7 +699,7 @@ didYouMeanConfusableUnicode
   -> a             -- ^ A name which is not in scope.
   -> Maybe (m Doc) -- ^ "did you mean" hint.
 didYouMeanConfusableUnicode inscope canon x
-  | null ys   = Just $ "UNICODE NEW: none of the following was considered confusable with out of scope name: " <+> prettyTCM inscope
+  | null ys   = Nothing --Just $ "UNICODE NEW: none of the following was considered confusable with out of scope name: " <+> prettyTCM inscope
   | otherwise = Just $ sep
       [ "UNICODE NEW: did you accidentally use a confusable character?"
       , nest 2 (vcat $ map (\ y -> text $ y) ys)
@@ -727,19 +727,30 @@ didYouMeanConfusableUnicode inscope canon x
 
   prettyDisplayDifferences :: String -> String -> [String]
   prettyDisplayDifferences x y =
-    [ List.intercalate "\t" $ [prettyShow x ++ "\t", hexX, prettyShow y ++ "\t", hexY]
-    , indicatorX ++ "\t\t\t\t" ++ indicatorY
+    -- [ List.intercalate "\t" $ [prettyShow x ++ "\t", hexX, prettyShow y ++ "\t", hexY]
+    -- , indicatorX ++ "\t\t\t\t" ++ indicatorY
+    -- ]
+    [ List.intercalate "\t" $ ["You typed", prettyShow x, hexX]
+    , "\t\t\t" ++ indicatorX
+    , List.intercalate "\t" $ ["In Scope\t", prettyShow y, hexY]
+    , "\t\t\t" ++ indicatorY
     ]
     where
       (charsX, charsY, indicatorX, indicatorY) = getConfusCharsHelp x y
       prettyHexcode :: String -> String
-      prettyHexcode zs = List.intercalate ", " $ map (\z -> "'" ++ [z] ++ "': 0x" ++ showHex (fromEnum z) "") zs
+      prettyHexcode zs = List.intercalate ", " $ map (\z -> "'\x200E" ++ z : "'\x200E: 0x" ++ showHex (fromEnum z) "") zs
       hexX = prettyHexcode charsX
       hexY = prettyHexcode charsY
 
+  insertAtN n y xs = List.intercalate [y] . groups n $ xs
+    where
+      groups n xs = takeWhile (not.null) . List.unfoldr (Just . splitAt n) $ xs
+
   confusableNames = map prettyShow $ filter (confusable (strip $ canon x) . strip . C.unqualify) inscope
   tmp = map (\y -> prettyDisplayDifferences (strip $ canon x) y) confusableNames
-  ys = (List.intercalate "\t" $ ["You typed", "Hex code(s)", "In scope", "Hex code(s)"]) : concat tmp --confusableNames
+  ys  | null tmp  = []
+      | otherwise = (List.intercalate "\t" $ ["\t\t", "Name", "Confusable characters"]) : (insertAtN 4 "OR" $ concat tmp) --confusableNames
+  -- ys = (List.intercalate "\t" $ ["You typed", "Hex code(s)", "In scope", "Hex code(s)"]) : concat tmp --confusableNames
 
 prettyTCWarnings :: Set TCWarning -> TCM String
 prettyTCWarnings = List.intercalate "\n" <.> map P.render <.> prettyTCWarnings'
