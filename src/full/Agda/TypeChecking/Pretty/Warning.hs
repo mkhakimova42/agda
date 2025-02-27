@@ -16,6 +16,7 @@ import Data.Set (Set)
 import qualified Data.Set  as Set
 import qualified Data.Text as T
 import qualified Data.Text.ICU           as ICU
+import Data.Text.ICU.Char (charFullName)
 
 import qualified Text.PrettyPrint.Boxes as Box
 
@@ -732,18 +733,33 @@ didYouMeanConfusableUnicode inscope canon x
     -- [ List.intercalate "\t" $ [prettyShow x ++ "\t", hexX, prettyShow y ++ "\t", hexY]
     -- , indicatorX ++ "\t\t\t\t" ++ indicatorY
     -- ]
-    [ [" ", "Name", "Confusable characters"]
-    , ["You typed", prettyShow x, hexX]
-    , [" ", indicatorX, " "]
-    , ["In Scope", prettyShow y, hexY]
-    , [" ", indicatorY, " "]
-    ]
+    case (hexX, hexY) of
+      ((hexXHead:hexXTail), (hexYHead:hexYTail)) ->  
+        [ [" ", "Name", "Char", "Hexcode", "Agda-mode input"]
+        , ["You typed", prettyShow x] ++ hexXHead]
+        ++ hexXTail ++
+        [ ["In Scope", prettyShow y] ++ hexYHead
+        ]
+        ++ hexYTail
+      otherwise -> []
     where
       (charsX, charsY, indicatorX, indicatorY) = getConfusCharsHelp x y
-      prettyHexcode :: String -> String
-      prettyHexcode zs = List.intercalate ", " $ map (\z -> "'\x200E" ++ z : "'\x200E: 0x" ++ showHex (fromEnum z) "") zs
-      hexX = prettyHexcode charsX
-      hexY = prettyHexcode charsY
+      prettyUnicodeInfo :: Int -> String -> String -> [[String]]
+      prettyUnicodeInfo n [] indicator 
+        | n == 1 = [[" ", indicator, " ", " ", " "]]
+        | otherwise = []
+      prettyUnicodeInfo n (z:zs) indicator
+        | n == 0 = (listUnicodeInfo z) : (prettyUnicodeInfo (n + 1) zs indicator)
+        | n == 1 = ([" ", indicator] ++ listUnicodeInfo z) : (prettyUnicodeInfo (n + 1) zs indicator)
+        | otherwise = ([" ", " "] ++ listUnicodeInfo z) : (prettyUnicodeInfo (n + 1) zs indicator)
+      --prettyHexcode zs = List.intercalate ", " $ map (\z -> "'\x200E" ++ z : "'\x200E: 0x" ++ showHex (fromEnum z) "") zs
+      
+      listUnicodeInfo :: Char -> [String]
+      --listUnicodeInfo z = ["\x200E" ++ [z], "\x202C 0x" ++ showHex (fromEnum z) "", "  " ++ charFullName z, "  " ++ "TBA"]
+      listUnicodeInfo z = ["\x200E" ++ [z], "\x200E 0x" ++ showHex (fromEnum z) "", "  " ++ "TBA"]
+
+      hexX = prettyUnicodeInfo 0 charsX indicatorX
+      hexY = prettyUnicodeInfo 0 charsY indicatorY
 
   insertAtN n y xs = List.intercalate [y] . groups n $ xs
     where
