@@ -15,8 +15,10 @@ import Data.Maybe
 import Data.Set (Set)
 import qualified Data.Set  as Set
 import qualified Data.Text as T
-import qualified Data.Text.ICU           as ICU
+import qualified Data.Text.ICU as ICU
 import Data.Text.ICU.Char (charFullName)
+import qualified Data.ByteString.Lazy as BS
+import qualified Data.Aeson as Aeson
 
 import qualified Text.PrettyPrint.Boxes as Box
 
