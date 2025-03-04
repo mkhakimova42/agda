@@ -722,11 +722,14 @@ didYouMeanConfusableUnicode inscope canon x
   -- dropModule x = fromMaybe x $ List.stripPrefix "module " x
   -- maxDist n    = div n 3
   -- close a b    = editDistance a b <= maxDist (length a)
+  strippedX   = strip $ canon x
 
   confusable a b  = ICU.areConfusable ICU.spoof (T.pack a) (T.pack b) /= ICU.CheckOK && a /= b
 
   getConfusChars :: String -> String -> String -> String -> String -> String -> (String, String, String, String)
-  getConfusChars [] ys charsX charsY indicatorX indicatorY = (charsX, charsY, indicatorX, indicatorY)
+  getConfusChars [] ys charsX charsY indicatorX indicatorY = case ys of
+    []  -> (charsX, charsY, indicatorX, indicatorY)
+    (y:ys')   -> getConfusChars [] ys' charsX charsY indicatorX (indicatorY ++ "-")
   getConfusChars xs [] charsX charsY indicatorX indicatorY = (charsX, charsY, indicatorX, indicatorY)
   --getConfusChars ('_':xs) ys charsX charsY indicatorX indicatorY = getConfusChars xs ys charsX charsY (indicatorX ++ "-") indicatorY
   getConfusChars xs ('_':ys) charsX charsY indicatorX indicatorY = getConfusChars xs ys charsX charsY indicatorX (indicatorY ++ "-")
@@ -769,31 +772,29 @@ didYouMeanConfusableUnicode inscope canon x
     where
       d = (Aeson.decode getJSON) :: Maybe Aeson.Value
 
-  prettyDisplayDifferences :: String -> String -> [[String]]
-  prettyDisplayDifferences x y =
+  prettyCharDifferences :: String -> String -> String
+  prettyCharDifferences x y =
     -- [ List.intercalate "\t" $ [prettyShow x ++ "\t", hexX, prettyShow y ++ "\t", hexY]
     -- , indicatorX ++ "\t\t\t\t" ++ indicatorY
     -- ]
-    case (hexX, hexY) of
-      ((hexXHead:hexXTail), (hexYHead:hexYTail)) ->
-        [ [" ", "Name", "Char", "Hexcode", "Agda-mode input"]
-        , ["You typed", prettyShow x] ++ hexXHead]
-        ++ hexXTail ++
-        [ ["In Scope", prettyShow y] ++ hexYHead
-        ]
-        ++ hexYTail
-      otherwise -> []
+    (renderBox 4 $ youTypedInScopeString) ++ "\n" ++ (renderBox 2 $ unicodeCharInfo)
     where
       (charsX, charsY, indicatorX, indicatorY) = getConfusCharsHelp x y
-      prettyUnicodeInfo :: Int -> String -> String -> [[String]]
-      prettyUnicodeInfo n [] indicator
-        | n == 1 = [[" ", indicator, " ", " ", " "]]
-        | otherwise = []
-      prettyUnicodeInfo n (z:zs) indicator
-        | n == 0 = (listUnicodeInfo z) : (prettyUnicodeInfo (n + 1) zs indicator)
-        | n == 1 = ([" ", indicator] ++ listUnicodeInfo z) : (prettyUnicodeInfo (n + 1) zs indicator)
-        | otherwise = ([" ", " "] ++ listUnicodeInfo z) : (prettyUnicodeInfo (n + 1) zs indicator)
+      -- prettyUnicodeInfo :: Int -> String -> String -> [[String]]
+      -- prettyUnicodeInfo n [] indicator
+      --   | n == 1 = [[" ", indicator, " ", " ", " "]]
+      --   | otherwise = []
+      -- prettyUnicodeInfo n (z:zs) indicator
+      --   | n == 0 = (listUnicodeInfo z) : (prettyUnicodeInfo (n + 1) zs indicator)
+      --   | n == 1 = ([" ", indicator] ++ listUnicodeInfo z) : (prettyUnicodeInfo (n + 1) zs indicator)
+      --   | otherwise = ([" ", " "] ++ listUnicodeInfo z) : (prettyUnicodeInfo (n + 1) zs indicator)
       --prettyHexcode zs = List.intercalate ", " $ map (\z -> "'\x200E" ++ z : "'\x200E: 0x" ++ showHex (fromEnum z) "") zs
+
+      renderBox :: Int -> [[String]] -> String
+      renderBox n = Box.render . Box.hsep n Box.left . map (Box.vcat Box.left . map Box.text) . List.transpose
+
+      -- renderBox2 :: Int -> [[String]] -> String
+      -- renderBox2 n = Box.render . Box.moveRight 4 . Box.hsep n Box.left . map (Box.vcat Box.left . map Box.text) . List.transpose
 
       agdaInput z = case Map.lookup (T.pack [z]) inputMap of
         Just inputs -> List.intercalate " or " $ map (\x -> "\\" ++ T.unpack x) inputs
@@ -801,17 +802,39 @@ didYouMeanConfusableUnicode inscope canon x
 
       listUnicodeInfo :: Char -> [String]
       --listUnicodeInfo z = ["\x200E" ++ [z], "\x202C 0x" ++ showHex (fromEnum z) "", "  " ++ charFullName z, "  " ++ "TBA"]
-      listUnicodeInfo z = ["\x200E" ++ [z], "\x200E 0x" ++ showHex (fromEnum z) "", "  " ++ agdaInput z]
+      listUnicodeInfo z = ["\x200E'" ++ [z] ++ "\x200E' (0x" ++ showHex (fromEnum z) "" ++ ")", "  " ++ agdaInput z, "  " ++ "C-x 8 RET " ++ showHex (fromEnum z) ""]
 
-      hexX = prettyUnicodeInfo 0 charsX indicatorX
-      hexY = prettyUnicodeInfo 0 charsY indicatorY
+      unicodeCharInfoHelper :: String -> String -> [[String]]
+      unicodeCharInfoHelper (charX:xs) (charY:ys) =
+        [ ["---->"] ++ listUnicodeInfo charX
+        , ["   vs"]  ++ listUnicodeInfo charY
+        , [" ", " ", " ", " "]
+        ]
+        ++ unicodeCharInfoHelper xs ys
+      unicodeCharInfoHelper _ _ = []
+
+      unicodeCharInfo :: [[String]]
+      unicodeCharInfo = [" ", "Character", "agda-mode input", "Emacs input"] : unicodeCharInfoHelper charsX charsY
+
+      -- hexX = prettyUnicodeInfo 0 charsX indicatorX
+      -- hexY = prettyUnicodeInfo 0 charsY indicatorY
+
+      reformattedX = case y of
+        ('_':ys)  -> " " ++ x
+        _         -> x
+
+      youTypedInScopeString :: [[String]]
+      youTypedInScopeString =
+        [ ["You typed:", reformattedX]
+        , ["In scope:", y]
+        , ["(diff)", indicatorY]]
 
   insertAtN n y xs = List.intercalate [y] . groups n $ xs
     where
       groups n xs = takeWhile (not.null) . List.unfoldr (Just . splitAt n) $ xs
 
-  confusableNames = List.nub $ map (prettyShow . C.unqualify) $ filter (confusable (strip $ canon x) . strip . C.unqualify) inscope
-  tmp = map (\y -> Box.render . Box.hsep 4 Box.left . map (Box.vcat Box.left . map Box.text) . List.transpose $ prettyDisplayDifferences (strip $ canon x) y) confusableNames
+  confusableNames = List.nub $ map (prettyShow . C.unqualify) $ filter (confusable strippedX . strip . C.unqualify) inscope
+  tmp = map (\y -> prettyCharDifferences strippedX y) confusableNames
   ys  | null tmp  = []
       | otherwise = insertAtN 1 "OR" $ tmp --confusableNames
   -- ys = (List.intercalate "\t" $ ["You typed", "Hex code(s)", "In scope", "Hex code(s)"]) : concat tmp --confusableNames
