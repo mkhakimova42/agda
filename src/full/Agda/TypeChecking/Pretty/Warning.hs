@@ -715,7 +715,7 @@ didYouMeanInfix
 didYouMeanInfix inscope canon x
   | null ys   = Nothing --Just "NEW: list of potential stuff was empty"
   | otherwise = Just $ sep
-      [ "NEW: did you forget whitespace in "
+      [ "did you forget whitespace in "
       , nest 2 (vcat $ punctuate " or" $
                  map (\ y -> text $ "'" ++ y ++ "'") ys)
         <> "?"
@@ -755,7 +755,7 @@ didYouMeanConfusableUnicode
 didYouMeanConfusableUnicode inscope canon x
   | null ys   = Nothing --Just $ "UNICODE NEW: none of the following was considered confusable with out of scope name: " <+> prettyTCM inscope
   | otherwise = Just $ sep
-      [ "UNICODE NEW: did you accidentally use a confusable character?"
+      [ "did you accidentally use a confusable character?"
       , nest 2 (vcat $ map (\ y -> multiLineText $ y) ys)
       ]
   where
