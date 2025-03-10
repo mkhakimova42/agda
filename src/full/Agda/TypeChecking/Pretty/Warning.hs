@@ -523,7 +523,9 @@ prettyWarning = \case
       suggestion inscope x = nest 2 $ par $ concat
         [ [ "did you forget space around the ':'?"  | ':' `elem` s ]
         , [ "did you forget space around the '->'?" | "->" `List.isInfixOf` s ]
+        -- , [ "did you forget space around the ','?"  | ',' `elem` s ]
         , maybeToList $ didYouMean inscope C.unqualify x
+        , maybeToList $ didYouMeanInfix inscope C.unqualify x
         , maybeToList $ didYouMeanConfusableUnicode inscope C.unqualify x
         ]
         where
@@ -702,7 +704,47 @@ didYouMean inscope canon x
   close a b    = editDistance a b <= maxDist (length a)
   ys           = map prettyShow $ filter (close (strip $ canon x) . strip . C.unqualify) inscope
 
-{-# SPECIALIZE didYouMean :: (Pretty a, Pretty b) => [C.QName] -> (a -> b) -> a -> Maybe (TCM Doc) #-}
+{-# SPECIALIZE didYouMeanInfix :: (Pretty a, Pretty b) => [C.QName] -> (a -> b) -> a -> Maybe (TCM Doc) #-}
+-- | Suggest a correction if the name can be completely broken down into names in scope.
+didYouMeanInfix
+  :: (MonadPretty m, Pretty a, Pretty b)
+  => [C.QName]     -- ^ Names in scope.
+  -> (a -> b)      -- ^ Canonization function for similarity search.
+  -> a             -- ^ A name which is not in scope.
+  -> Maybe (m Doc) -- ^ "did you mean" hint.
+didYouMeanInfix inscope canon x
+  | null ys   = Nothing --Just "NEW: list of potential stuff was empty"
+  | otherwise = Just $ sep
+      [ "NEW: did you forget whitespace in "
+      , nest 2 (vcat $ punctuate " or" $
+                 map (\ y -> text $ "'" ++ y ++ "'") ys)
+        <> "?"
+      ]
+  where
+  strip :: Pretty b => b -> String
+  strip        = filter (/= '_') . prettyShow
+  -- dropModule x = fromMaybe x $ List.stripPrefix "module " x
+  -- maxDist n    = div n 3
+  -- close a b    = editDistance a b <= maxDist (length a)
+  wordBreakHelp :: [String] -> [String] -> [String] -> String -> [[String]]
+  wordBreakHelp wordSet modWordSet curWords [] = [curWords]
+  wordBreakHelp wordSet [] curWords word = []
+  wordBreakHelp wordSet (y:ys) curWords word
+    | (y `List.isPrefixOf` word) && (not $ null y) = (wordBreakHelp wordSet wordSet (curWords ++ [y]) (drop (length y) word)) ++ (wordBreakHelp wordSet ys curWords word) --TODO: ask jesper
+    | otherwise = wordBreakHelp wordSet ys curWords word
+
+  wordBreak :: [String] -> String -> [[String]]
+  wordBreak wordSet word = wordBreakHelp wordSet wordSet [] word
+
+  infixes = filter (\y -> (strip . C.unqualify $ y) `List.isInfixOf` (strip $ canon x)) inscope
+  tmp = List.nub $ map (\y -> prettyShow . strip . C.unqualify $ y) infixes
+
+  -- need to filter out cases where the entire stripped name is in scope, as spaces cannot help (e.g. see test/Fail/AnonymousImport)
+  ys = map unwords . filter ((> 1) . length) . wordBreak tmp . strip $ canon x
+  --ys = map prettyShow $ infixes
+
+
+{-# SPECIALIZE didYouMeanConfusableUnicode :: (Pretty a, Pretty b) => [C.QName] -> (a -> b) -> a -> Maybe (TCM Doc) #-}
 -- | Suggest some corrections to a misspelled name.
 didYouMeanConfusableUnicode
   :: (MonadPretty m, Pretty a, Pretty b)
