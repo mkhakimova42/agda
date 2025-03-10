@@ -557,7 +557,9 @@ instance PrettyTCM TypeError where
           , case a of
                 AsTermsOf t -> pwords "of type" ++ [prettyTCM t]
                 AsSizes     -> pwords "of type" ++ [prettyTCM =<< sizeType]
-                AsTypes     -> []
+                AsTypes     -> {-[]-} case s of
+                  I.Pi a b -> ["(did you supply too few arguments to a function?)"]
+                  _ -> []
           , [return d]
           ]
 
