@@ -844,19 +844,19 @@ didYouMeanConfusableUnicode inscope canon x
 
       listUnicodeInfo :: Char -> [String]
       --listUnicodeInfo z = ["\x200E" ++ [z], "\x202C 0x" ++ showHex (fromEnum z) "", "  " ++ charFullName z, "  " ++ "TBA"]
-      listUnicodeInfo z = ["\x200E'" ++ [z] ++ "\x200E' (0x" ++ showHex (fromEnum z) "" ++ ")", "  " ++ agdaInput z, "  " ++ "C-x 8 RET " ++ showHex (fromEnum z) ""]
+      listUnicodeInfo z = ["\x200E'" ++ [z] ++ "\x200E' (0x" ++ showHex (fromEnum z) "" ++ ")", "  " ++ charFullName z, "  " ++ agdaInput z, "  " ++ "C-x 8 RET " ++ showHex (fromEnum z) ""]
 
       unicodeCharInfoHelper :: String -> String -> [[String]]
       unicodeCharInfoHelper (charX:xs) (charY:ys) =
         [ ["---->"] ++ listUnicodeInfo charX
         , ["   vs"]  ++ listUnicodeInfo charY
-        , [" ", " ", " ", " "]
+        , [" ", " ", " ", " ", " "]
         ]
         ++ unicodeCharInfoHelper xs ys
       unicodeCharInfoHelper _ _ = []
 
       unicodeCharInfo :: [[String]]
-      unicodeCharInfo = [" ", "Character", "agda-mode input", "Emacs input"] : unicodeCharInfoHelper charsX charsY
+      unicodeCharInfo = [" ", "Character", "Character name", "agda-mode input", "Emacs input"] : unicodeCharInfoHelper charsX charsY
 
       -- hexX = prettyUnicodeInfo 0 charsX indicatorX
       -- hexY = prettyUnicodeInfo 0 charsY indicatorY
@@ -875,7 +875,10 @@ didYouMeanConfusableUnicode inscope canon x
     where
       groups n xs = takeWhile (not.null) . List.unfoldr (Just . splitAt n) $ xs
 
-  confusableNames = List.nub $ map (prettyShow . C.unqualify) $ filter (confusable strippedX . strip . C.unqualify) inscope
+  -- from what i understand, these will never be a valid suggestion, as it would not show up during scopechecking
+  filteredInscope = filter ((< 3) . (length . filter (== '_') . prettyShow)) inscope
+
+  confusableNames = List.nub $ map (prettyShow . C.unqualify) $ filter (confusable strippedX . strip . C.unqualify) filteredInscope
   tmp = map (\y -> prettyCharDifferences strippedX y) confusableNames
   ys  | null tmp  = []
       | otherwise = insertAtN 1 "OR" $ tmp --confusableNames
