@@ -501,7 +501,6 @@ prettyWarning = \case
       [ fsep $ pwords "Not in scope:"
       , do
         inscope <- Set.toList . concreteNamesInScope <$> getScope
-        reportSDoc "maria" 10 $ "everything in scope (hopefully): " <+> prettyTCM inscope
         prettyNotInScopeNames True (suggestion inscope) $ singleton x
       ]
       where
@@ -699,7 +698,7 @@ didYouMeanInfix
 didYouMeanInfix inscope canon x
   | null ys   = Nothing --Just "NEW: list of potential stuff was empty"
   | otherwise = Just $ sep
-      [ "NEW: did you forget whitespace in "
+      [ "did you forget whitespace in "
       , nest 2 (vcat $ punctuate " or" $
                  map (\ y -> text $ "'" ++ y ++ "'") ys)
         <> "?"
