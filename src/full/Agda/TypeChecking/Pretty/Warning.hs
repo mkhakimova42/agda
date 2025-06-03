@@ -516,7 +516,6 @@ prettyWarning = \case
       [ fsep $ pwords "Not in scope:"
       , do
         inscope <- Set.toList . concreteNamesInScope <$> getScope
-        reportSDoc "maria" 10 $ "everything in scope (hopefully): " <+> prettyTCM inscope
         prettyNotInScopeNames True (suggestion inscope) $ singleton x
       ]
       where
@@ -702,7 +701,7 @@ didYouMean inscope canon x
   close a b    = editDistance a b <= maxDist (length a)
   ys           = map prettyShow $ filter (close (strip $ canon x) . strip . C.unqualify) inscope
 
-{-# SPECIALIZE didYouMean :: (Pretty a, Pretty b) => [C.QName] -> (a -> b) -> a -> Maybe (TCM Doc) #-}
+{-# SPECIALIZE didYouMeanConfusableUnicode :: (Pretty a, Pretty b) => [C.QName] -> (a -> b) -> a -> Maybe (TCM Doc) #-}
 -- | Suggest some corrections to a misspelled name.
 didYouMeanConfusableUnicode
   :: (MonadPretty m, Pretty a, Pretty b)
@@ -713,7 +712,7 @@ didYouMeanConfusableUnicode
 didYouMeanConfusableUnicode inscope canon x
   | null ys   = Nothing --Just $ "UNICODE NEW: none of the following was considered confusable with out of scope name: " <+> prettyTCM inscope
   | otherwise = Just $ sep
-      [ "UNICODE NEW: did you accidentally use a confusable character?"
+      [ "did you accidentally use a confusable character?"
       , nest 2 (vcat $ map (\ y -> multiLineText $ y) ys)
       ]
   where
@@ -802,19 +801,19 @@ didYouMeanConfusableUnicode inscope canon x
 
       listUnicodeInfo :: Char -> [String]
       --listUnicodeInfo z = ["\x200E" ++ [z], "\x202C 0x" ++ showHex (fromEnum z) "", "  " ++ charFullName z, "  " ++ "TBA"]
-      listUnicodeInfo z = ["\x200E'" ++ [z] ++ "\x200E' (0x" ++ showHex (fromEnum z) "" ++ ")", "  " ++ agdaInput z, "  " ++ "C-x 8 RET " ++ showHex (fromEnum z) ""]
+      listUnicodeInfo z = ["\x200E'" ++ [z] ++ "\x200E' (0x" ++ showHex (fromEnum z) "" ++ ")", "  " ++ charFullName z, "  " ++ agdaInput z, "  " ++ "C-x 8 RET " ++ showHex (fromEnum z) ""]
 
       unicodeCharInfoHelper :: String -> String -> [[String]]
       unicodeCharInfoHelper (charX:xs) (charY:ys) =
         [ ["---->"] ++ listUnicodeInfo charX
         , ["   vs"]  ++ listUnicodeInfo charY
-        , [" ", " ", " ", " "]
+        , [" ", " ", " ", " ", " "]
         ]
         ++ unicodeCharInfoHelper xs ys
       unicodeCharInfoHelper _ _ = []
 
       unicodeCharInfo :: [[String]]
-      unicodeCharInfo = [" ", "Character", "agda-mode input", "Emacs input"] : unicodeCharInfoHelper charsX charsY
+      unicodeCharInfo = [" ", "Character", "Character name", "agda-mode input", "Emacs input"] : unicodeCharInfoHelper charsX charsY
 
       -- hexX = prettyUnicodeInfo 0 charsX indicatorX
       -- hexY = prettyUnicodeInfo 0 charsY indicatorY
@@ -833,7 +832,10 @@ didYouMeanConfusableUnicode inscope canon x
     where
       groups n xs = takeWhile (not.null) . List.unfoldr (Just . splitAt n) $ xs
 
-  confusableNames = List.nub $ map (prettyShow . C.unqualify) $ filter (confusable strippedX . strip . C.unqualify) inscope
+  -- from what i understand, these will never be a valid suggestion, as it would not show up during scopechecking
+  filteredInscope = filter ((< 3) . (length . filter (== '_') . prettyShow)) inscope
+
+  confusableNames = List.nub $ map (prettyShow . C.unqualify) $ filter (confusable strippedX . strip . C.unqualify) filteredInscope
   tmp = map (\y -> prettyCharDifferences strippedX y) confusableNames
   ys  | null tmp  = []
       | otherwise = insertAtN 1 "OR" $ tmp --confusableNames
