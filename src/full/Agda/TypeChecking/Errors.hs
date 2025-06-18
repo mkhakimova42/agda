@@ -556,15 +556,10 @@ instance PrettyTCM TypeError where
           [ [return d1, notCmp cmp, return d2]
           , case a of
                 AsTermsOf t -> pwords "of type" ++ [prettyTCM t]
-                AsSizes     -> pwords "of type" ++ [prettyTCM =<< sizeType] 
+                AsSizes     -> pwords "of type" ++ [prettyTCM =<< sizeType]
                 AsTypes     -> []
           , [return d]
           ]
-      -- where
-      --   argSuggestion = case s of
-      --             I.Pi a b -> pwords "(did you supply too few arguments to a function?)"
-      --             _ -> []
-        
 
     UnequalLevel cmp s t -> fsep $
       [prettyTCM s, notCmp cmp, prettyTCM t]
