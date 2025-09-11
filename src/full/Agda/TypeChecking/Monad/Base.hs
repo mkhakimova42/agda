@@ -3726,7 +3726,7 @@ instance HasRange Call where
     getRange (InferDef f)                        = getRange f
     getRange (CheckArguments fun _ _ _)          = getRange fun
     getRange (CheckMetaSolution r _ _ _)         = r
-    getRange (CheckTargetType r _ _ _)             = r
+    getRange (CheckTargetType r _ _ _)           = r
     getRange (CheckDataDef i _ _ _)              = getRange i
     getRange (CheckRecDef i _ _ _)               = getRange i
     getRange (CheckConstructor _ _ _ c)          = getRange c
