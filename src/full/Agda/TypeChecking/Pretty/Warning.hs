@@ -722,18 +722,21 @@ didYouMeanConfusableUnicode inscope canon x
 
   confusable a b  = ICU.areConfusable ICU.spoof (T.pack a) (T.pack b) /= ICU.CheckOK && a /= b
 
-  getConfusChars :: String -> String -> String -> String -> String -> String -> (String, String, String, String)
-  getConfusChars [] ys charsX charsY indicatorX indicatorY = case ys of
-    []  -> (charsX, charsY, indicatorX, indicatorY)
-    (y:ys')   -> getConfusChars [] ys' charsX charsY indicatorX (indicatorY ++ "-")
-  getConfusChars xs [] charsX charsY indicatorX indicatorY = (charsX, charsY, indicatorX, indicatorY)
-  getConfusChars xs ('_':ys) charsX charsY indicatorX indicatorY = getConfusChars xs ys charsX charsY indicatorX (indicatorY ++ "-")
-  getConfusChars (x:xs) (y:ys) charsX charsY indicatorX indicatorY
-    | x /= y = getConfusChars xs ys (charsX ++ [x]) (charsY ++ [y]) (indicatorX ++ "^") (indicatorY ++ "^")
-    | otherwise = getConfusChars xs ys charsX charsY (indicatorX ++ "-") (indicatorY ++ "-")
+  diffIndicator :: String -> String -> String
+  diffIndicator x y = zipWith (\x y -> if x == y then '-' else '^') x y
 
-  getConfusCharsHelp :: String -> String -> (String, String, String, String)
-  getConfusCharsHelp x y = getConfusChars x y [] [] [] []
+  differences :: Eq a => [a] -> [a] -> [(a, a)]
+  differences x y = catMaybes (zipWith (\x y -> if x == y then Nothing else Just (x,y)) x y)
+
+  overlap :: [a] -> [a] -> [a]
+  overlap [] ys = ys
+  overlap _ [] = []
+  overlap (x:xs) (_:ys) = x : overlap xs ys
+
+  getConfusChars :: String -> String -> (String, String, String, String)
+  getConfusChars x y = (x', y', overlap di ('-' <$ x), overlap di ('-' <$ y)) where
+    (x', y') = unzip $ differences x y
+    di = diffIndicator x y
 
   getJSON :: BS.ByteString
   getJSON = BS.fromStrict $(embedFileRelative "src/data/emacs-mode/keybindings.json")
@@ -771,7 +774,7 @@ didYouMeanConfusableUnicode inscope canon x
   prettyCharDifferences x y =
     (renderBox 4 $ youTypedInScopeString) ++ "\n" ++ (renderBox 2 $ unicodeCharInfo)
     where
-      (charsX, charsY, indicatorX, indicatorY) = getConfusCharsHelp x y
+      (charsX, charsY, indicatorX, indicatorY) = getConfusChars x y
 
       renderBox :: Int -> [[String]] -> String
       renderBox n = Box.render . Box.hsep n Box.left . map (Box.vcat Box.left . map Box.text) . List.transpose
