@@ -702,7 +702,7 @@ didYouMean inscope canon x
   ys           = map prettyShow $ filter (close (strip $ canon x) . strip . C.unqualify) inscope
 
 {-# SPECIALIZE didYouMeanConfusableUnicode :: (Pretty a, Pretty b) => [C.QName] -> (a -> b) -> a -> Maybe (TCM Doc) #-}
--- | Suggest some corrections to a misspelled name.
+-- | Suggest some corrections to a misspelled name if we suspect that visually confusable unicode was used.
 didYouMeanConfusableUnicode
   :: (MonadPretty m, Pretty a, Pretty b)
   => [C.QName]     -- ^ Names in scope.
@@ -710,7 +710,7 @@ didYouMeanConfusableUnicode
   -> a             -- ^ A name which is not in scope.
   -> Maybe (m Doc) -- ^ "did you mean" hint.
 didYouMeanConfusableUnicode inscope canon x
-  | null ys   = Nothing --Just $ "UNICODE NEW: none of the following was considered confusable with out of scope name: " <+> prettyTCM inscope
+  | null ys   = Nothing 
   | otherwise = Just $ sep
       [ "did you accidentally use a confusable character?"
       , nest 2 (vcat $ map (\ y -> multiLineText $ y) ys)
@@ -718,9 +718,6 @@ didYouMeanConfusableUnicode inscope canon x
   where
   strip :: Pretty b => b -> String
   strip        = map toLower . filter (/= '_') . prettyShow
-  -- dropModule x = fromMaybe x $ List.stripPrefix "module " x
-  -- maxDist n    = div n 3
-  -- close a b    = editDistance a b <= maxDist (length a)
   strippedX   = strip $ canon x
 
   confusable a b  = ICU.areConfusable ICU.spoof (T.pack a) (T.pack b) /= ICU.CheckOK && a /= b
@@ -730,7 +727,6 @@ didYouMeanConfusableUnicode inscope canon x
     []  -> (charsX, charsY, indicatorX, indicatorY)
     (y:ys')   -> getConfusChars [] ys' charsX charsY indicatorX (indicatorY ++ "-")
   getConfusChars xs [] charsX charsY indicatorX indicatorY = (charsX, charsY, indicatorX, indicatorY)
-  --getConfusChars ('_':xs) ys charsX charsY indicatorX indicatorY = getConfusChars xs ys charsX charsY (indicatorX ++ "-") indicatorY
   getConfusChars xs ('_':ys) charsX charsY indicatorX indicatorY = getConfusChars xs ys charsX charsY indicatorX (indicatorY ++ "-")
   getConfusChars (x:xs) (y:ys) charsX charsY indicatorX indicatorY
     | x /= y = getConfusChars xs ys (charsX ++ [x]) (charsY ++ [y]) (indicatorX ++ "^") (indicatorY ++ "^")
@@ -740,7 +736,7 @@ didYouMeanConfusableUnicode inscope canon x
   getConfusCharsHelp x y = getConfusChars x y [] [] [] []
 
   getJSON :: BS.ByteString
-  getJSON = BS.fromStrict $(embedFileRelative "src/data/emacs-mode/keybindings.json") --unsafePerformIO $ BS.readFile "src/data/emacs-mode/keybindings.json"
+  getJSON = BS.fromStrict $(embedFileRelative "src/data/emacs-mode/keybindings.json")
   {-# NOINLINE getJSON #-}
 
   keyValToText :: [(Aeson.Key, Aeson.Value)] -> [(T.Text, [T.Text])]
@@ -750,7 +746,7 @@ didYouMeanConfusableUnicode inscope canon x
     Aeson.Array arr -> case Key.toString k of
       "" -> keyValToText ys
       _ -> (Prelude.map (\(x, y) -> (y, [x])) $ sequence (Key.toText k, Prelude.map (\(Aeson.String x) -> x) $ Fold.toList arr)) ++ keyValToText ys
-    _ -> [] -- Something went wrong
+    _ -> []
 
   valueToTuple :: [Aeson.Value] -> [(T.Text, [T.Text])]
   valueToTuple [] = []
@@ -767,40 +763,24 @@ didYouMeanConfusableUnicode inscope canon x
   inputMap =
     case d of
       Nothing -> Map.empty
-      Just ps -> parseMap ps --Map.lookup (pack "∉") (parseMap ps) --test ps --Prelude.filter (\x -> (lastName x ==  pack ("Haskell")) ) ps
+      Just ps -> parseMap ps 
     where
       d = (Aeson.decode getJSON) :: Maybe Aeson.Value
 
   prettyCharDifferences :: String -> String -> String
   prettyCharDifferences x y =
-    -- [ List.intercalate "\t" $ [prettyShow x ++ "\t", hexX, prettyShow y ++ "\t", hexY]
-    -- , indicatorX ++ "\t\t\t\t" ++ indicatorY
-    -- ]
     (renderBox 4 $ youTypedInScopeString) ++ "\n" ++ (renderBox 2 $ unicodeCharInfo)
     where
       (charsX, charsY, indicatorX, indicatorY) = getConfusCharsHelp x y
-      -- prettyUnicodeInfo :: Int -> String -> String -> [[String]]
-      -- prettyUnicodeInfo n [] indicator
-      --   | n == 1 = [[" ", indicator, " ", " ", " "]]
-      --   | otherwise = []
-      -- prettyUnicodeInfo n (z:zs) indicator
-      --   | n == 0 = (listUnicodeInfo z) : (prettyUnicodeInfo (n + 1) zs indicator)
-      --   | n == 1 = ([" ", indicator] ++ listUnicodeInfo z) : (prettyUnicodeInfo (n + 1) zs indicator)
-      --   | otherwise = ([" ", " "] ++ listUnicodeInfo z) : (prettyUnicodeInfo (n + 1) zs indicator)
-      --prettyHexcode zs = List.intercalate ", " $ map (\z -> "'\x200E" ++ z : "'\x200E: 0x" ++ showHex (fromEnum z) "") zs
 
       renderBox :: Int -> [[String]] -> String
       renderBox n = Box.render . Box.hsep n Box.left . map (Box.vcat Box.left . map Box.text) . List.transpose
-
-      -- renderBox2 :: Int -> [[String]] -> String
-      -- renderBox2 n = Box.render . Box.moveRight 4 . Box.hsep n Box.left . map (Box.vcat Box.left . map Box.text) . List.transpose
 
       agdaInput z = case Map.lookup (T.pack [z]) inputMap of
         Just inputs -> List.intercalate " or " $ map (\x -> "\\" ++ T.unpack x) inputs
         Nothing -> ""
 
       listUnicodeInfo :: Char -> [String]
-      --listUnicodeInfo z = ["\x200E" ++ [z], "\x202C 0x" ++ showHex (fromEnum z) "", "  " ++ charFullName z, "  " ++ "TBA"]
       listUnicodeInfo z = ["\x200E'" ++ [z] ++ "\x200E' (0x" ++ showHex (fromEnum z) "" ++ ")", "  " ++ charFullName z, "  " ++ agdaInput z, "  " ++ "C-x 8 RET " ++ showHex (fromEnum z) ""]
 
       unicodeCharInfoHelper :: String -> String -> [[String]]
@@ -814,9 +794,6 @@ didYouMeanConfusableUnicode inscope canon x
 
       unicodeCharInfo :: [[String]]
       unicodeCharInfo = [" ", "Character", "Character name", "agda-mode input", "Emacs input"] : unicodeCharInfoHelper charsX charsY
-
-      -- hexX = prettyUnicodeInfo 0 charsX indicatorX
-      -- hexY = prettyUnicodeInfo 0 charsY indicatorY
 
       reformattedX = case y of
         ('_':ys)  -> " " ++ x
@@ -838,8 +815,7 @@ didYouMeanConfusableUnicode inscope canon x
   confusableNames = List.nub $ map (prettyShow . C.unqualify) $ filter (confusable strippedX . strip . C.unqualify) filteredInscope
   tmp = map (\y -> prettyCharDifferences strippedX y) confusableNames
   ys  | null tmp  = []
-      | otherwise = insertAtN 1 "OR" $ tmp --confusableNames
-  -- ys = (List.intercalate "\t" $ ["You typed", "Hex code(s)", "In scope", "Hex code(s)"]) : concat tmp --confusableNames
+      | otherwise = insertAtN 1 "OR" $ tmp
 
 prettyTCWarnings :: Set TCWarning -> TCM String
 prettyTCWarnings = List.intercalate "\n" <.> map P.render <.> prettyTCWarnings'
