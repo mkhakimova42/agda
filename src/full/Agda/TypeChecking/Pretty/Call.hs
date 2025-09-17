@@ -116,16 +116,15 @@ instance PrettyTCM Call where
       pwords "of metavariable" ++ [prettyTCM m] ++
       pwords "has the expected type" ++ [prettyTCM a]
 
-    CheckTargetType r infTy expTy sFun -> sep
+    CheckTargetType r infTy expTy sFun -> sep $
       [ "when checking that the inferred type of an application"
       , nest 2 $ prettyTCM infTy
       , "matches the expected type"
-      , nest 2 $ prettyTCM expTy
-      , sep tmp ]
-      where
-        tmp = case unEl infTy of
-          Agda.Syntax.Internal.Pi a b -> pwords "(did you supply too few arguments to " ++ [prettyTCM sFun] ++ pwords "?)"
-          _ -> []
+      , nest 2 $ prettyTCM expTy 
+      ] ++
+      [ sep (pwords "(did you supply too few arguments to " ++ [prettyTCM sFun] ++ pwords "?)") 
+      | Agda.Syntax.Internal.Pi _ _ <- [unEl infTy]
+      ]
 
     CheckRecDef _ x ps cs ->
       fsep $ pwords "when checking the definition of" ++ [prettyTCM x]
