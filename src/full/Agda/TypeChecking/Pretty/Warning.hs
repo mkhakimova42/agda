@@ -706,16 +706,22 @@ didYouForgetSpace inscope canon x
   strip :: Pretty b => b -> String
   strip        = filter (/= '_') . prettyShow
 
-  wordBreakHelp :: [String] -> [String] -> [String] -> String -> [[String]]
-  wordBreakHelp wordSet modWordSet curWords [] = [curWords]
-  wordBreakHelp wordSet [] curWords word = []
-  wordBreakHelp wordSet (y:ys) curWords word
-    | (y `List.isPrefixOf` word) && (not $ null y) =
-      (wordBreakHelp wordSet wordSet (curWords ++ [y]) (drop (length y) word)) ++ (wordBreakHelp wordSet ys curWords word)
-    | otherwise = wordBreakHelp wordSet ys curWords word
+  dropPrefix :: Eq a => [a] -> [a] -> Maybe [a]
+  dropPrefix (x:xs) (y:ys)
+    | x == y = dropPrefix xs ys
+    | otherwise = Nothing
+  dropPrefix [] ys = Just ys
+  dropPrefix _ [] = Nothing
 
   wordBreak :: [String] -> String -> [[String]]
-  wordBreak wordSet word = wordBreakHelp wordSet wordSet [] word
+  wordBreak wordSet word = go wordSet wordSet [] word where
+    go wordSet modWordSet curWords [] = [curWords]
+    go wordSet [] curWords word = []
+    go wordSet ("":ys) curWords word = go wordSet ys curWords word
+    go wordSet (y:ys) curWords word = 
+      (do rest <- maybeToList (dropPrefix y word)
+          go wordSet wordSet (curWords ++ [y]) rest)
+      ++ go wordSet ys curWords word
 
   infixes = List.nub $ filter (`List.isInfixOf` strip (canon x)) $ map (strip . C.unqualify) inscope
 
