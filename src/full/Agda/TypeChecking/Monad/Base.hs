@@ -3680,7 +3680,7 @@ data Call
   | InferDef QName
   | CheckArguments A.Expr [NamedArg A.Expr] Type (Maybe Type)
   | CheckMetaSolution Range MetaId Type Term
-  | CheckTargetType Range Type Type
+  | CheckTargetType Range Type Type A.Expr
   | CheckDataDef Range QName [A.LamBinding] [A.Constructor]
   | CheckRecDef Range QName [A.LamBinding] [A.Constructor]
   | CheckConstructor QName Telescope Sort A.Constructor
@@ -3768,7 +3768,7 @@ instance HasRange Call where
     getRange (InferDef f)                        = getRange f
     getRange (CheckArguments fun _ _ _)          = getRange fun
     getRange (CheckMetaSolution r _ _ _)         = r
-    getRange (CheckTargetType r _ _)             = r
+    getRange (CheckTargetType r _ _ _)           = r
     getRange (CheckDataDef i _ _ _)              = getRange i
     getRange (CheckRecDef i _ _ _)               = getRange i
     getRange (CheckConstructor _ _ _ c)          = getRange c

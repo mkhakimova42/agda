@@ -760,7 +760,7 @@ checkArgumentsE'
                   chk <-
                     traceCall
                       (CheckTargetType
-                         (fuseRange sFun sArgs) tgt1 sResultType) $
+                         (fuseRange sFun sArgs) tgt1 sResultType sFun) $
                       CheckedTarget <$>
                         ifNoConstraints_ (compareType sComp tgt1 sResultType)
                           (return Nothing) (return . Just)
