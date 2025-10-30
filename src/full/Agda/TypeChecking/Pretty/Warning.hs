@@ -573,6 +573,7 @@ prettyWarning = \case
         [ [ "did you forget space around the ':'?"  | ':' `elem` s ]
         , [ "did you forget space around the '->'?" | "->" `List.isInfixOf` s ]
         , maybeToList $ didYouMean inscope C.unqualify x
+        , maybeToList $ didYouForgetSpace inscope C.unqualify x
         ]
         where
         par []  = empty
@@ -760,6 +761,47 @@ didYouMean inscope canon x
   close a b    = editDistance a b <= maxDist (length a)
   ys           = map prettyShow $ filter (close (strip $ canon x) . strip . C.unqualify) inscope
 
+{-# SPECIALIZE didYouForgetSpace :: (Pretty a, Pretty b) => [C.QName] -> (a -> b) -> a -> Maybe (TCM Doc) #-}
+-- | Suggest a correction if the name can be completely broken down into names in scope.
+didYouForgetSpace
+  :: (MonadPretty m, Pretty a, Pretty b)
+  => [C.QName]     -- ^ Names in scope.
+  -> (a -> b)      -- ^ Canonization function for similarity search.
+  -> a             -- ^ A name which is not in scope.
+  -> Maybe (m Doc) -- ^ "did you forget whitespace in ..." hint.
+didYouForgetSpace inscope canon x
+  | null ys   = Nothing
+  | otherwise = Just $ sep
+      [ "did you forget whitespace in "
+      , nest 2 (vcat $ punctuate " or" $
+                 map (\ y -> text $ "'" ++ y ++ "'") ys)
+        <> "?"
+      ]
+  where
+  strip :: Pretty b => b -> String
+  strip        = filter (/= '_') . prettyShow
+
+  dropPrefix :: Eq a => [a] -> [a] -> Maybe [a]
+  dropPrefix (x:xs) (y:ys)
+    | x == y = dropPrefix xs ys
+    | otherwise = Nothing
+  dropPrefix [] ys = Just ys
+  dropPrefix _ [] = Nothing
+
+  wordBreak :: [String] -> String -> [[String]]
+  wordBreak wordSet word = go wordSet wordSet [] word where
+    go wordSet modWordSet curWords [] = [curWords]
+    go wordSet [] curWords word = []
+    go wordSet ("":ys) curWords word = go wordSet ys curWords word
+    go wordSet (y:ys) curWords word = 
+      (do rest <- maybeToList (dropPrefix y word)
+          go wordSet wordSet (curWords ++ [y]) rest)
+      ++ go wordSet ys curWords word
+
+  infixes = List.nub $ filter (`List.isInfixOf` strip (canon x)) $ map (strip . C.unqualify) inscope
+
+  -- need to filter out cases where the entire strkipped name is in scope, as spaces cannot help (e.g. see test/Fail/AnonymousImport)
+  ys = map unwords . filter ((> 1) . length) . wordBreak infixes . strip $ canon x
 
 prettyTCWarnings :: Set TCWarning -> TCM String
 prettyTCWarnings = List.intercalate "\n" <.> map P.render <.> prettyTCWarnings'
